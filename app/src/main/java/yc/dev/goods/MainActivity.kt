@@ -9,7 +9,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import dagger.hilt.android.AndroidEntryPoint
-import yc.dev.goods.ui.screen.goodslist.GoodsList
+import yc.dev.goods.ui.screen.goodslist.GoodsListScreen
 import yc.dev.goods.ui.theme.GoodsTheme
 
 @AndroidEntryPoint
@@ -22,7 +22,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             GoodsTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    GoodsList()
+                    GoodsListScreen()
                 }
             }
         }
