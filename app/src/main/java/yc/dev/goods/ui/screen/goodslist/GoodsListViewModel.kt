@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import yc.dev.goods.data.model.Good
 import yc.dev.goods.data.model.GoodsList
 import yc.dev.goods.data.repository.GoodsRepository
 import javax.inject.Inject
@@ -20,7 +21,10 @@ class GoodsListViewModel @Inject constructor(
     goodsRepository: GoodsRepository,
 ) : ViewModel() {
 
+    private val _changedGoods: MutableMap<Int, Good> = mutableMapOf()
+
     val goodsListUiState: StateFlow<GoodsListUiState> = goodsRepository.fetchData().map {
+        it.goods.forEach { good -> _changedGoods[good.id] = good }
         GoodsListUiState.Success(it)
     }.stateIn(
         scope = viewModelScope,
@@ -35,6 +39,10 @@ class GoodsListViewModel @Inject constructor(
         viewModelScope.launch {
             _filterEvent.emit(Unit)
         }
+    }
+
+    fun updateLikeState(good: Good) {
+        _changedGoods[good.id] = good
     }
 }
 

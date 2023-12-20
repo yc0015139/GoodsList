@@ -22,7 +22,7 @@ class GoodsRepository @Inject constructor(
             Good(
                 id = it,
                 title = "goods",
-                isLike = false,
+                isLiked = false,
             )
         }
         val goodsList = GoodsList(promos, goods)

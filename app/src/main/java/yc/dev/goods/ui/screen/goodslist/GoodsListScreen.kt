@@ -33,6 +33,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -82,7 +83,8 @@ fun GoodsListScreen(
 
     GoodsList(
         isFilterItemSticky = isSticky.value,
-        onFilterClick = { goodsListViewModel.changeFilter() },
+        onFilterClicked = { goodsListViewModel.changeFilter() },
+        onLikeClicked = { good -> goodsListViewModel.updateLikeState(good) },
         filterEvent = goodsListViewModel.filterEvent,
         statusBarHeight = statusBarHeight,
         listState = listState,
@@ -95,7 +97,8 @@ fun GoodsListScreen(
 fun GoodsList(
     modifier: Modifier = Modifier,
     isFilterItemSticky: Boolean,
-    onFilterClick: () -> Unit,
+    onFilterClicked: () -> Unit,
+    onLikeClicked: (Good) -> Unit,
     filterEvent: SharedFlow<Unit>,
     statusBarHeight: Dp,
     listState: LazyListState,
@@ -117,7 +120,7 @@ fun GoodsList(
         stickyHeader(key = KEY_FILTER_ITEM) {
             Spacer(modifier = Modifier.size(if (isFilterItemSticky) statusBarHeight else 0.dp))
             FilterItem(
-                onFilterClick = onFilterClick,
+                onFilterClicked = onFilterClicked,
             )
         }
 
@@ -125,6 +128,7 @@ fun GoodsList(
             GoodsBlock(
                 goods = uiState.goodsList.goods,
                 filterEvent = filterEvent,
+                onLikeClicked = onLikeClicked,
             )
         }
 
@@ -185,7 +189,7 @@ private fun getPromoTextAlignment(index: Int) = when (index % 3) {
 
 @Composable
 fun FilterItem(
-    onFilterClick: () -> Unit,
+    onFilterClicked: () -> Unit,
 ) {
     Box(
         modifier = Modifier
@@ -206,7 +210,7 @@ fun FilterItem(
                 .padding(end = itemSpacing)
                 .align(Alignment.CenterEnd)
                 .clickable(
-                    onClick = onFilterClick,
+                    onClick = onFilterClicked,
                 ),
             imageVector = Icons.Default.List,
             contentDescription = "Filter",
@@ -214,11 +218,11 @@ fun FilterItem(
     }
 }
 
-@OptIn(ExperimentalAnimationApi::class)
 @Composable
 private fun GoodsBlock(
     goods: List<Good>,
     filterEvent: SharedFlow<Unit>,
+    onLikeClicked: (Good) -> Unit,
 ) {
     val isGrid = remember { mutableStateOf(true) }
     ObserverAsEvent(filterEvent) {
@@ -241,7 +245,11 @@ private fun GoodsBlock(
         userScrollEnabled = false,
     ) {
         items(goods.size) { idx ->
-            GoodItem(targetState = column, width, height, goods[idx])
+            GoodItem(
+                targetState = column,
+                onLikeClicked = onLikeClicked,
+                width, height, goods[idx],
+            )
         }
     }
 }
@@ -259,6 +267,7 @@ private fun calculateDimensions(isGrid: Boolean, screenWidth: Dp): Pair<Dp, Dp> 
 @Composable
 private fun GoodItem(
     targetState: Int,
+    onLikeClicked: (Good) -> Unit,
     width: Dp,
     height: Dp,
     good: Good,
@@ -282,16 +291,33 @@ private fun GoodItem(
                 modifier = Modifier.align(Alignment.Center),
                 text = "${good.title} ${good.id}"
             )
-            Icon(
-                imageVector = Icons.Outlined.ThumbUp,
-                contentDescription = "Thumb Up",
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(itemSpacing),
+            LikeButton(
+                modifier = Modifier.align(Alignment.BottomEnd),
+                onLikeClicked,
+                good,
             )
         }
 
     }
+}
+
+@Composable
+private fun LikeButton(
+    modifier: Modifier,
+    onLikeClicked: (Good) -> Unit,
+    good: Good,
+) {
+    val isLiked = remember { mutableStateOf(good.isLiked) }
+    Icon(
+        imageVector = if (isLiked.value) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
+        contentDescription = "Thumb Up",
+        modifier = modifier
+            .padding(itemSpacing)
+            .clickable {
+                onLikeClicked.invoke(good.copy(isLiked = !isLiked.value))
+                isLiked.value = !isLiked.value
+            },
+    )
 }
 
 @Composable
@@ -310,7 +336,7 @@ fun GoodsListPreview() {
                 Good(
                     id = it,
                     title = "goods",
-                    isLike = false,
+                    isLiked = false,
                 )
             }
         )
@@ -320,7 +346,8 @@ fun GoodsListPreview() {
     GoodsTheme {
         GoodsList(
             isFilterItemSticky = false,
-            onFilterClick = { },
+            onFilterClicked = { },
+            onLikeClicked = { _ -> },
             filterEvent = fakeSharedFlow,
             statusBarHeight = 16.dp,
             listState = rememberLazyListState(),

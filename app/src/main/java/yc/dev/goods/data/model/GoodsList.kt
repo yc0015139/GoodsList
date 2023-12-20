@@ -11,5 +11,5 @@ data class Promo(
 data class Good(
     val id: Int,
     val title: String,
-    val isLike: Boolean,
+    val isLiked: Boolean,
 )
