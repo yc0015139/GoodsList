@@ -1,5 +1,13 @@
 package yc.dev.goods.ui.screen.goodslist
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.with
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -25,12 +33,14 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,7 +49,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.times
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -113,6 +123,7 @@ fun GoodsList(
 
         item {
             GoodsBlock(
+                goods = uiState.goodsList.goods,
                 filterEvent = filterEvent,
             )
         }
@@ -203,22 +214,83 @@ fun FilterItem(
     }
 }
 
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 private fun GoodsBlock(
+    goods: List<Good>,
     filterEvent: SharedFlow<Unit>,
 ) {
+    val isGrid = remember { mutableStateOf(true) }
     ObserverAsEvent(filterEvent) {
-        // Trigger event here
+        isGrid.value = !isGrid.value
     }
+    val (width, height) = calculateDimensions(isGrid.value, getScreenWidth())
 
-    for (idx in 0..49) {
-        Text(
-            text = "Hello $idx!",
-            modifier = Modifier,
-            fontSize = 20.sp,
-        )
-        if (idx >= 26) break
-        Spacer(modifier = Modifier.height(itemSpacing))
+    val column = if (isGrid.value) 2 else 1
+    val blockHeight =
+        if (isGrid.value) goods.size / 2 * (height + itemSpacing) + itemSpacing
+        else goods.size * (height + itemSpacing)
+
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(column),
+        modifier = Modifier
+            .height(blockHeight),
+        contentPadding = PaddingValues(itemSpacing),
+        verticalArrangement = Arrangement.spacedBy(itemSpacing),
+        horizontalArrangement = Arrangement.spacedBy(itemSpacing),
+        userScrollEnabled = false,
+    ) {
+        items(goods.size) { idx ->
+            GoodItem(targetState = column, width, height, goods[idx])
+        }
+    }
+}
+
+private fun calculateDimensions(isGrid: Boolean, screenWidth: Dp): Pair<Dp, Dp> {
+    val width = if (isGrid) (screenWidth - itemSpacing * 3) / 2 else screenWidth - itemSpacing * 2
+    val gridItemRectangleRadio = 1.125f
+    val listItemRectangleRadio = 1.77f
+    val rectangleRatio = if (isGrid) gridItemRectangleRadio else 1 / listItemRectangleRadio
+    val height = (width * rectangleRatio)
+    return Pair(width, height)
+}
+
+@OptIn(ExperimentalAnimationApi::class)
+@Composable
+private fun GoodItem(
+    targetState: Int,
+    width: Dp,
+    height: Dp,
+    good: Good,
+) {
+    AnimatedContent(
+        targetState = targetState,
+        transitionSpec = {
+            scaleIn(initialScale = 0.85f, animationSpec = tween(350, delayMillis = 50)) +
+                fadeIn(animationSpec = tween(300)) with
+                scaleOut(animationSpec = tween(300)) +
+                fadeOut(animationSpec = tween(350, delayMillis = 50))
+        },
+        label = "AnimatedItem",
+    ) {
+        Box(
+            modifier = Modifier
+                .size(width, height)
+                .border(width = 1.dp, color = Color.Black),
+        ) {
+            Text(
+                modifier = Modifier.align(Alignment.Center),
+                text = "${good.title} ${good.id}"
+            )
+            Icon(
+                imageVector = Icons.Outlined.ThumbUp,
+                contentDescription = "Thumb Up",
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(itemSpacing),
+            )
+        }
+
     }
 }
 
