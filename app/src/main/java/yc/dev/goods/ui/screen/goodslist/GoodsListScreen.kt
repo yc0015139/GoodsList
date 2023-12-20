@@ -1,11 +1,11 @@
 package yc.dev.goods.ui.screen.goodslist
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -15,23 +15,27 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
-import androidx.compose.foundation.layout.windowInsetsTopHeight
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -52,52 +56,86 @@ fun GoodsListScreen(
 ) {
     val nowUiState by goodsListViewModel.goodsListUiState.collectAsState()
     val uiState: GoodsListUiState.Success = nowUiState as? GoodsListUiState.Success ?: return
+
+    val density = LocalDensity.current
+    val statusBarHeightInPx = WindowInsets.statusBars.getTop(density)
+    val statusBarHeight = with(density) { statusBarHeightInPx.toDp() }
+    val listState = rememberLazyListState()
+    val isSticky = remember(statusBarHeightInPx) {
+        derivedStateOf {
+            listState.layoutInfo.visibleItemsInfo.any {
+                val earlyResponseRadio = 1.5
+                it.key == KEY_FILTER_ITEM && it.offset < statusBarHeightInPx * earlyResponseRadio
+            }
+        }
+    }
+
     GoodsList(
+        isFilterItemSticky = isSticky.value,
         onFilterClick = { goodsListViewModel.changeFilter() },
         filterEvent = goodsListViewModel.filterEvent,
+        statusBarHeight = statusBarHeight,
+        listState = listState,
         uiState = uiState,
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun GoodsList(
     modifier: Modifier = Modifier,
+    isFilterItemSticky: Boolean,
     onFilterClick: () -> Unit,
     filterEvent: SharedFlow<Unit>,
+    statusBarHeight: Dp,
+    listState: LazyListState,
     uiState: GoodsListUiState.Success,
 ) {
-    val scrollState = rememberScrollState()
-
-    Column(
+    LazyColumn(
         modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState)
+            .fillMaxSize(),
+        state = listState,
     ) {
-        Spacer(modifier = Modifier.windowInsetsTopHeight(WindowInsets.systemBars))
 
-        PromoGrid(uiState.goodsList.promos)
+        item {
+            PromoGrid(
+                promos = uiState.goodsList.promos,
+                statusBarHeight = statusBarHeight,
+            )
+        }
 
-        FilterItem(onFilterClick)
+        stickyHeader(key = KEY_FILTER_ITEM) {
+            Spacer(modifier = Modifier.size(if (isFilterItemSticky) statusBarHeight else 0.dp))
+            FilterItem(
+                onFilterClick = onFilterClick,
+            )
+        }
 
-        GoodsBlock(
-            modifier = modifier.align(Alignment.CenterHorizontally),
-            filterEvent = filterEvent,
-        )
+        item {
+            GoodsBlock(
+                filterEvent = filterEvent,
+            )
+        }
 
-        Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
+        item {
+            Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
+        }
     }
 }
 
 @Composable
 private fun PromoGrid(
     promos: List<Promo>,
+    statusBarHeight: Dp,
 ) {
-    val promoGridHeight = getScreenWidth()
+    val promoGridHeight = getScreenWidth() + statusBarHeight
 
     val column = 3
     LazyVerticalGrid(
         columns = GridCells.Fixed(column),
-        modifier = Modifier.height(promoGridHeight),
+        modifier = Modifier
+            .height(promoGridHeight)
+            .padding(top = statusBarHeight),
         contentPadding = PaddingValues(itemSpacing),
         verticalArrangement = Arrangement.spacedBy(itemSpacing),
         horizontalArrangement = Arrangement.spacedBy(itemSpacing),
@@ -167,7 +205,6 @@ fun FilterItem(
 
 @Composable
 private fun GoodsBlock(
-    modifier: Modifier,
     filterEvent: SharedFlow<Unit>,
 ) {
     ObserverAsEvent(filterEvent) {
@@ -177,11 +214,11 @@ private fun GoodsBlock(
     for (idx in 0..49) {
         Text(
             text = "Hello $idx!",
-            modifier = modifier,
+            modifier = Modifier,
             fontSize = 20.sp,
         )
         if (idx >= 26) break
-        Spacer(modifier = modifier.height(itemSpacing))
+        Spacer(modifier = Modifier.height(itemSpacing))
     }
 }
 
@@ -189,6 +226,7 @@ private fun GoodsBlock(
 private fun getItemSize(): Dp = (getScreenWidth() - itemSpacing * 4) / 3
 
 private val itemSpacing = 16.dp
+private const val KEY_FILTER_ITEM = "FilterItem"
 
 @Preview(showBackground = true)
 @Composable
@@ -209,8 +247,11 @@ fun GoodsListPreview() {
 
     GoodsTheme {
         GoodsList(
-            onFilterClick = {},
+            isFilterItemSticky = false,
+            onFilterClick = { },
             filterEvent = fakeSharedFlow,
+            statusBarHeight = 16.dp,
+            listState = rememberLazyListState(),
             uiState = fakeUiState,
         )
     }
