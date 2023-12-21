@@ -30,22 +30,27 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
@@ -72,6 +77,8 @@ fun GoodsListScreen(
     val density = LocalDensity.current
     val statusBarHeightInPx = WindowInsets.statusBars.getTop(density)
     val statusBarHeight = with(density) { statusBarHeightInPx.toDp() }
+    val navigationBarHeightInPx = WindowInsets.statusBars.getTop(density)
+    val navigationBarHeight = with(density) { navigationBarHeightInPx.toDp() }
     val listState = rememberLazyListState()
     val isSticky = remember(statusBarHeightInPx) {
         derivedStateOf {
@@ -82,15 +89,97 @@ fun GoodsListScreen(
         }
     }
 
-    GoodsList(
+    GoodsListContent(
         isFilterItemSticky = isSticky.value,
         onFilterClicked = { goodsListViewModel.changeFilter() },
         onLikeClicked = { good -> goodsListViewModel.updateLikedState(good) },
+        onUpdateRemainingCount = { idx -> goodsListViewModel.updateRemainingCount(idx) },
+        remainingGoodsCountEvent = goodsListViewModel.remainingGoodsCountEvent,
         filterEvent = goodsListViewModel.filterEvent,
         statusBarHeight = statusBarHeight,
+        navigationBarHeight = navigationBarHeight,
         listState = listState,
         uiState = uiState,
     )
+}
+
+@Composable
+fun GoodsListContent(
+    modifier: Modifier = Modifier,
+    isFilterItemSticky: Boolean,
+    onFilterClicked: () -> Unit,
+    onLikeClicked: (Good) -> Unit,
+    onUpdateRemainingCount: (Int) -> Unit,
+    filterEvent: SharedFlow<Map<Int, Good>>,
+    remainingGoodsCountEvent: SharedFlow<Int>,
+    statusBarHeight: Dp,
+    navigationBarHeight: Dp,
+    listState: LazyListState,
+    uiState: GoodsListUiState.Success,
+) {
+    val remainingGoodsCount = remember { mutableStateOf(0) }
+    ObserverAsEvent(remainingGoodsCountEvent) {
+        remainingGoodsCount.value = it
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize(),
+    ) {
+        GoodsList(
+            modifier,
+            isFilterItemSticky,
+            onFilterClicked,
+            onLikeClicked,
+            onUpdateRemainingCount,
+            filterEvent,
+            statusBarHeight,
+            listState,
+            uiState,
+        )
+
+        if (isFilterItemSticky) {
+            BottomRemainingCountItem(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter),
+                navigationBarHeight,
+                remainingGoodsCount.value,
+            )
+        }
+    }
+}
+
+@Composable
+private fun BottomRemainingCountItem(
+    modifier: Modifier,
+    navigationBarHeight: Dp,
+    count: Int,
+) {
+    Box(
+        modifier = modifier
+            .padding(bottom = itemSpacing / 2 + navigationBarHeight)
+            .height(getItemSize())
+            .aspectRatio(1.75f)
+            .background(color = Color.LightGray)
+            .border(width = 1.dp, color = Color.Black),
+    ) {
+        Text(
+            text = "剩餘 $count 項產品",
+            modifier = Modifier
+                .align(Alignment.Center)
+        )
+        Icon(
+            imageVector = Icons.Filled.ArrowDropDown,
+            modifier = Modifier
+                .rotate(180f)
+                .padding(itemSpacing)
+                .align(Alignment.BottomCenter)
+                .clickable {
+
+                },
+            contentDescription = "ToTop",
+        )
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -100,6 +189,7 @@ fun GoodsList(
     isFilterItemSticky: Boolean,
     onFilterClicked: () -> Unit,
     onLikeClicked: (Good) -> Unit,
+    onUpdateRemainingCount: (Int) -> Unit,
     filterEvent: SharedFlow<Map<Int, Good>>,
     statusBarHeight: Dp,
     listState: LazyListState,
@@ -130,6 +220,7 @@ fun GoodsList(
                 defaultGoods = uiState.goodsList.goods,
                 filterEvent = filterEvent,
                 onLikeClicked = onLikeClicked,
+                onUpdateRemainingCount = onUpdateRemainingCount,
             )
         }
 
@@ -224,6 +315,7 @@ private fun GoodsBlock(
     defaultGoods: Map<Int, Good>,
     filterEvent: SharedFlow<Map<Int, Good>>,
     onLikeClicked: (Good) -> Unit,
+    onUpdateRemainingCount: (Int) -> Unit,
 ) {
     val isGrid = remember { mutableStateOf(true) }
     val rememberGoods = rememberSaveable { mutableStateOf(defaultGoods) }
@@ -297,7 +389,7 @@ private fun GoodItem(
                 modifier = Modifier.align(Alignment.Center),
                 text = "${good.title} ${good.id}"
             )
-            
+
             LikeButton(
                 modifier = Modifier.align(Alignment.BottomEnd),
                 onLikeClicked,
@@ -350,15 +442,19 @@ fun GoodsListPreview() {
             }.associateBy { it.id }
         )
     )
-    val fakeSharedFlow: SharedFlow<Map<Int, Good>> = MutableSharedFlow()
+    val fakeFilterEvent: SharedFlow<Map<Int, Good>> = MutableSharedFlow()
+    val fakeCurrentGoodIndexEvent: SharedFlow<Int> = MutableSharedFlow()
 
     GoodsTheme {
-        GoodsList(
-            isFilterItemSticky = false,
+        GoodsListContent(
+            isFilterItemSticky = true,
             onFilterClicked = { },
             onLikeClicked = { _ -> },
-            filterEvent = fakeSharedFlow,
+            onUpdateRemainingCount = { _ -> },
+            filterEvent = fakeFilterEvent,
+            remainingGoodsCountEvent = fakeCurrentGoodIndexEvent,
             statusBarHeight = 16.dp,
+            navigationBarHeight = 16.dp,
             listState = rememberLazyListState(),
             uiState = fakeUiState,
         )

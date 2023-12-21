@@ -35,6 +35,9 @@ class GoodsListViewModel @Inject constructor(
     private val _filterEvent: MutableSharedFlow<Map<Int, Good>> = MutableSharedFlow()
     val filterEvent: SharedFlow<Map<Int, Good>> = _filterEvent.asSharedFlow()
 
+    private val _remainingGoodsCountEvent: MutableSharedFlow<Int> = MutableSharedFlow()
+    val remainingGoodsCountEvent: SharedFlow<Int> = _remainingGoodsCountEvent.asSharedFlow()
+
     fun changeFilter() {
         viewModelScope.launch {
             _filterEvent.emit(_goods)
@@ -45,6 +48,13 @@ class GoodsListViewModel @Inject constructor(
         _goods[good.id]?.let {
             _goods[good.id] = good
         } ?: throw IllegalStateException("Good not found")
+    }
+
+    fun updateRemainingCount(currentIndex: Int) {
+        viewModelScope.launch {
+            val remainingGoodsCount = _goods.size - currentIndex - 1
+            _remainingGoodsCountEvent.emit(remainingGoodsCount)
+        }
     }
 }
 
