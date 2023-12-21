@@ -43,6 +43,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -84,7 +85,7 @@ fun GoodsListScreen(
     GoodsList(
         isFilterItemSticky = isSticky.value,
         onFilterClicked = { goodsListViewModel.changeFilter() },
-        onLikeClicked = { good -> goodsListViewModel.updateLikeState(good) },
+        onLikeClicked = { good -> goodsListViewModel.updateLikedState(good) },
         filterEvent = goodsListViewModel.filterEvent,
         statusBarHeight = statusBarHeight,
         listState = listState,
@@ -99,7 +100,7 @@ fun GoodsList(
     isFilterItemSticky: Boolean,
     onFilterClicked: () -> Unit,
     onLikeClicked: (Good) -> Unit,
-    filterEvent: SharedFlow<Unit>,
+    filterEvent: SharedFlow<Map<Int, Good>>,
     statusBarHeight: Dp,
     listState: LazyListState,
     uiState: GoodsListUiState.Success,
@@ -126,7 +127,7 @@ fun GoodsList(
 
         item {
             GoodsBlock(
-                goods = uiState.goodsList.goods,
+                defaultGoods = uiState.goodsList.goods,
                 filterEvent = filterEvent,
                 onLikeClicked = onLikeClicked,
             )
@@ -145,7 +146,7 @@ private fun PromoGrid(
 ) {
     val promoGridHeight = getScreenWidth() + statusBarHeight
 
-    val column = 3
+    val column = THREE_COLUMNS
     LazyVerticalGrid(
         columns = GridCells.Fixed(column),
         modifier = Modifier
@@ -220,19 +221,21 @@ fun FilterItem(
 
 @Composable
 private fun GoodsBlock(
-    goods: List<Good>,
-    filterEvent: SharedFlow<Unit>,
+    defaultGoods: Map<Int, Good>,
+    filterEvent: SharedFlow<Map<Int, Good>>,
     onLikeClicked: (Good) -> Unit,
 ) {
     val isGrid = remember { mutableStateOf(true) }
+    val rememberGoods = rememberSaveable { mutableStateOf(defaultGoods) }
     ObserverAsEvent(filterEvent) {
         isGrid.value = !isGrid.value
+        rememberGoods.value = it
     }
+    val goods = rememberGoods.value
     val (width, height) = calculateDimensions(isGrid.value, getScreenWidth())
-
-    val column = if (isGrid.value) 2 else 1
+    val column = if (isGrid.value) TWO_COLUMNS else ONE_COLUMN
     val blockHeight =
-        if (isGrid.value) goods.size / 2 * (height + itemSpacing) + itemSpacing
+        if (isGrid.value) goods.size / TWO_COLUMNS * (height + itemSpacing) + itemSpacing
         else goods.size * (height + itemSpacing)
 
     LazyVerticalGrid(
@@ -245,21 +248,24 @@ private fun GoodsBlock(
         userScrollEnabled = false,
     ) {
         items(goods.size) { idx ->
+            val good = goods[idx] ?: return@items
             GoodItem(
                 targetState = column,
                 onLikeClicked = onLikeClicked,
-                width, height, goods[idx],
+                width, height, good,
             )
         }
     }
 }
 
 private fun calculateDimensions(isGrid: Boolean, screenWidth: Dp): Pair<Dp, Dp> {
-    val width = if (isGrid) (screenWidth - itemSpacing * 3) / 2 else screenWidth - itemSpacing * 2
+    val width =
+        if (isGrid) (screenWidth - itemSpacing * (TWO_COLUMNS + 1)) / TWO_COLUMNS
+        else screenWidth - itemSpacing * (ONE_COLUMN + 1)
     val gridItemRectangleRadio = 1.125f
     val listItemRectangleRadio = 1.77f
     val rectangleRatio = if (isGrid) gridItemRectangleRadio else 1 / listItemRectangleRadio
-    val height = (width * rectangleRatio)
+    val height = width * rectangleRatio
     return Pair(width, height)
 }
 
@@ -291,13 +297,13 @@ private fun GoodItem(
                 modifier = Modifier.align(Alignment.Center),
                 text = "${good.title} ${good.id}"
             )
+            
             LikeButton(
                 modifier = Modifier.align(Alignment.BottomEnd),
                 onLikeClicked,
                 good,
             )
         }
-
     }
 }
 
@@ -325,6 +331,9 @@ private fun getItemSize(): Dp = (getScreenWidth() - itemSpacing * 4) / 3
 
 private val itemSpacing = 16.dp
 private const val KEY_FILTER_ITEM = "FilterItem"
+private const val ONE_COLUMN = 1
+private const val TWO_COLUMNS = 2
+private const val THREE_COLUMNS = 3
 
 @Preview(showBackground = true)
 @Composable
@@ -338,10 +347,10 @@ fun GoodsListPreview() {
                     title = "goods",
                     isLiked = false,
                 )
-            }
+            }.associateBy { it.id }
         )
     )
-    val fakeSharedFlow: SharedFlow<Unit> = MutableSharedFlow()
+    val fakeSharedFlow: SharedFlow<Map<Int, Good>> = MutableSharedFlow()
 
     GoodsTheme {
         GoodsList(

@@ -21,10 +21,10 @@ class GoodsListViewModel @Inject constructor(
     goodsRepository: GoodsRepository,
 ) : ViewModel() {
 
-    private val _changedGoods: MutableMap<Int, Good> = mutableMapOf()
+    private val _goods: MutableMap<Int, Good> = mutableMapOf()
 
     val goodsListUiState: StateFlow<GoodsListUiState> = goodsRepository.fetchData().map {
-        it.goods.forEach { good -> _changedGoods[good.id] = good }
+        it.goods.forEach { (id, good) -> _goods[id] = good }
         GoodsListUiState.Success(it)
     }.stateIn(
         scope = viewModelScope,
@@ -32,17 +32,19 @@ class GoodsListViewModel @Inject constructor(
         initialValue = GoodsListUiState.Loading,
     )
 
-    private val _filterEvent: MutableSharedFlow<Unit> = MutableSharedFlow()
-    val filterEvent: SharedFlow<Unit> = _filterEvent.asSharedFlow()
+    private val _filterEvent: MutableSharedFlow<Map<Int, Good>> = MutableSharedFlow()
+    val filterEvent: SharedFlow<Map<Int, Good>> = _filterEvent.asSharedFlow()
 
     fun changeFilter() {
         viewModelScope.launch {
-            _filterEvent.emit(Unit)
+            _filterEvent.emit(_goods)
         }
     }
 
-    fun updateLikeState(good: Good) {
-        _changedGoods[good.id] = good
+    fun updateLikedState(good: Good) {
+        _goods[good.id]?.let {
+            _goods[good.id] = good
+        } ?: throw IllegalStateException("Good not found")
     }
 }
 

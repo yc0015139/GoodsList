@@ -18,13 +18,13 @@ class GoodsRepository @Inject constructor(
                 title = "promo"
             )
         }
-        val goods = (0..29).map {
+        val goods: Map<Int, Good> = (0..29).map {
             Good(
                 id = it,
                 title = "goods",
                 isLiked = false,
             )
-        }
+        }.associateBy { it.id }
         val goodsList = GoodsList(promos, goods)
         emit(goodsList)
     }.flowOn(Dispatchers.IO)
